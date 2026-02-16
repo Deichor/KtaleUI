@@ -44,7 +44,7 @@ object UIFileSerializer {
     private fun serializeValue(value: Any?): String {
         return when (value) {
             null -> "null"
-            is String -> "\"$value\""
+            is String -> if (value.startsWith("#")) value else "\"$value\""
             is Boolean -> if (value) "true" else "false"
             is Int -> value.toString()
             is Float -> formatFloat(value)

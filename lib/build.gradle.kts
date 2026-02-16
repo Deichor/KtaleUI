@@ -4,9 +4,22 @@ plugins {
 
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
+    `maven-publish`
 }
 
 group = "org.deichor.ktaleui"
+version = "1.0.0"
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            groupId = "org.deichor"
+            artifactId = "ktaleui"
+            version = project.version.toString()
+        }
+    }
+}
 
 repositories {
     // Use Maven Central for resolving dependencies.
