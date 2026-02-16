@@ -3,8 +3,9 @@ package org.deichor.ktaleui.element
 import org.deichor.ktaleui.enums.LayoutMode
 import org.deichor.ktaleui.enums.MouseWheelScrollBehaviourType
 import org.deichor.ktaleui.property.*
+import org.deichor.ktaleui.runtime.EventContext
 
-typealias EventHandler = (eventData: Map<String, Any?>) -> Unit
+typealias EventHandler = (ctx: EventContext) -> Unit
 
 abstract class UIElement(val elementType: String) {
     var id: String? = null
