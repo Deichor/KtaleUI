@@ -3,8 +3,14 @@ package org.deichor.ktaleui.dsl
 import org.deichor.ktaleui.element.*
 
 // Helper to add element to UIBuilder (root level)
+private fun sanitizeId(id: String?): String? {
+    if (id.isNullOrBlank()) return null
+    return id.replace(Regex("[^a-zA-Z0-9_\\-]"), "")
+        .takeIf { it.isNotEmpty() }
+}
+
 private fun <T : UIElement> UIBuilder.addChild(element: T, id: String?, block: T.() -> Unit): T {
-    element.id = id
+    element.id = sanitizeId(id)
     element.block()
     addElement(element)
     return element
@@ -12,7 +18,7 @@ private fun <T : UIElement> UIBuilder.addChild(element: T, id: String?, block: T
 
 // Helper to add element to ContainerElement
 private fun <T : UIElement> ContainerElement.addChild(element: T, id: String?, block: T.() -> Unit): T {
-    element.id = id
+    element.id = sanitizeId(id)
     element.block()
     children.add(element)
     return element

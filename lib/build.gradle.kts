@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "org.deichor.ktaleui"
-version = "1.0.0"
+version = project.property("version") as String
 
 publishing {
     publications {

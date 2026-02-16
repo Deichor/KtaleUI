@@ -13,6 +13,7 @@ import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder
 import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder
 import com.hypixel.hytale.server.core.universe.PlayerRef
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore
+import org.deichor.ktaleui.KtaleUI
 import org.deichor.ktaleui.KtaleUIDefinition
 import org.deichor.ktaleui.element.EventHandler
 
@@ -30,8 +31,7 @@ class KtaleUIPage(
         eventBuilder: UIEventBuilder,
         store: Store<EntityStore>,
     ) {
-        // Send the .ui layout inline
-        commandBuilder.appendInline(null, definition.serialize())
+        commandBuilder.append(KtaleUI.getPath(definition))
 
         // Register event bindings for all elements that have handlers
         val elements = collectElementsWithEvents(definition.rootElements)

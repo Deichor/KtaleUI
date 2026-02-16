@@ -17,7 +17,10 @@ object UIFileSerializer {
 
     private fun serializeElement(element: UIElement, sb: StringBuilder, indent: Int) {
         val prefix = "  ".repeat(indent)
-        val idSuffix = element.id?.let { " #$it" } ?: ""
+        val sanitizedId = element.id
+            ?.replace(Regex("[^a-zA-Z0-9_\\-]"), "")
+            ?.takeIf { it.isNotEmpty() }
+        val idSuffix = sanitizedId?.let { " #$it" } ?: ""
         val properties = element.collectProperties()
         val children = if (element is ContainerElement) element.children else emptyList()
 
