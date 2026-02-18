@@ -3,7 +3,7 @@
 
 [versions]
 kotlin = "2.3.10"
-hytale = "2026.02.06-aa1b071c2"
+hytale = "2026.02.17-255364b8e"
 
 [libraries]
 hytale = { module = "com.hypixel.hytale:Server", version.ref = "hytale" }
