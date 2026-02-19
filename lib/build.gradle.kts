@@ -35,6 +35,7 @@ repositories {
 }
 
 dependencies {
+    compileOnly(kotlin("stdlib"))
     compileOnly(libs.hytale)
 }
 
