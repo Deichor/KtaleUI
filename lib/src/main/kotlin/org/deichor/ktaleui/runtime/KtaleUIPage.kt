@@ -40,10 +40,18 @@ class KtaleUIPage(
             for ((eventName, _) in element.eventHandlers) {
                 val bindingType = CustomUIEventBindingType.valueOf(eventName)
                 val action = "$elementId:$eventName"
+                val eventData = EventData.of("Action", action)
+
+                // For ValueChanged on text inputs, include the element's current value as string
+                val textTypes = setOf("TextField", "CompactTextField", "MultilineTextField", "NumberField", "CodeEditor")
+                if (eventName == "ValueChanged" && element.elementType in textTypes) {
+                    eventData.append("@Value", "#$elementId.Value")
+                }
+
                 eventBuilder.addEventBinding(
                     bindingType,
                     "#$elementId",
-                    EventData.of("Action", action),
+                    eventData,
                     false,
                 )
             }
@@ -81,9 +89,11 @@ class KtaleUIPage(
 
     class KtaleEventData {
         var action: String? = null
+        var value: String? = null
 
         fun toMap(): Map<String, String> = buildMap {
             action?.let { put("Action", it) }
+            value?.let { put("Value", it) }
         }
 
         companion object {
@@ -95,6 +105,12 @@ class KtaleUIPage(
                     KeyedCodec("Action", Codec.STRING),
                     { data, value -> data.action = value },
                     { data -> data.action },
+                )
+                .add()
+                .append(
+                    KeyedCodec("@Value", Codec.STRING),
+                    { data, value -> data.value = value },
+                    { data -> data.value },
                 )
                 .add()
                 .build()
