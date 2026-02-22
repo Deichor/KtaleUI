@@ -1,7 +1,6 @@
 package org.deichor.ktaleui.asset
 
 import com.hypixel.hytale.common.util.ArrayUtil
-import com.hypixel.hytale.logger.HytaleLogger
 import com.hypixel.hytale.protocol.Asset
 import com.hypixel.hytale.protocol.ToClientPacket
 import com.hypixel.hytale.protocol.packets.setup.AssetFinalize
@@ -11,7 +10,6 @@ import com.hypixel.hytale.protocol.packets.setup.RequestCommonAssetsRebuild
 import com.hypixel.hytale.server.core.io.PacketHandler
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.logging.Level
 
 /**
  * Pre-defined dynamic image asset slots that can be sent to players at runtime.
@@ -22,7 +20,6 @@ import java.util.logging.Level
  */
 object DynamicImageAsset {
 
-    private val LOGGER = HytaleLogger.get("KtaleUI-DynamicImage")
     private const val MAX_SLOTS = 25
     private const val CHUNK_SIZE = 2_621_440 // Same as CommonAssetModule.MAX_FRAME
 
@@ -109,38 +106,19 @@ object DynamicImageAsset {
      */
     fun sendToPlayer(packetHandler: PacketHandler, slotIndex: Int, imageBytes: ByteArray) {
         val assetName = SLOT_ASSET_NAMES[slotIndex]
-        val uiPath = SLOT_PATHS[slotIndex]
-        val hash = SLOT_HASHES[slotIndex]
-        LOGGER.at(Level.INFO).log(
-            "Sending dynamic image: slot=%d, assetName=%s, uiPath=%s, hash=%s, bytes=%d",
-            slotIndex, assetName, uiPath, hash, imageBytes.size,
-        )
-
-        val assetPacket = Asset(hash, assetName)
+        val assetPacket = Asset(SLOT_HASHES[slotIndex], assetName)
         val chunks = ArrayUtil.split(imageBytes, CHUNK_SIZE)
 
         val packets = mutableListOf<ToClientPacket>()
-
-        // 1. Initialize: tell client which asset and total size
         packets.add(AssetInitialize(assetPacket, imageBytes.size))
-
-        // 2. Parts: send data chunks
         for (chunk in chunks) {
             packets.add(AssetPart(chunk))
         }
-
-        // 3. Finalize: signal end of this asset transfer
         packets.add(AssetFinalize())
-
-        LOGGER.at(Level.INFO).log(
-            "Writing %d packets (1 init + %d parts + 1 finalize) for slot %d",
-            packets.size, chunks.size, slotIndex,
-        )
 
         // Send asset data packets together (matches server's CommonAssetModule pattern)
         packetHandler.write(*packets.toTypedArray())
 
-        // 4. Rebuild: tell client to rebuild its asset cache
         // MUST use writeNoCache — same as server's CommonAssetModule.sendAssetsToPlayer()
         packetHandler.writeNoCache(RequestCommonAssetsRebuild())
     }

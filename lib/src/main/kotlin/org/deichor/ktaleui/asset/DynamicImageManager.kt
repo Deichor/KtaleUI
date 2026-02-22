@@ -74,33 +74,22 @@ object DynamicImageManager {
      * @return asset info with the path the UI can reference, or null on failure
      */
     fun sendImage(playerRef: PlayerRef, url: String, ttlSeconds: Long = 300): CachedAssetInfo? {
-        LOGGER.at(Level.INFO).log("[sendImage] url=%s, player=%s", url, playerRef.username)
-
         // Check if already sent to this player and still valid
         val existing = getCachedAssetInfo(playerRef.uuid, url)
-        if (existing != null) {
-            LOGGER.at(Level.INFO).log("[sendImage] Cache hit for %s -> %s", url, existing.path)
-            return existing
-        }
+        if (existing != null) return existing
 
         // Download (or use byte cache)
-        val bytes = downloadBytes(url, ttlSeconds)
-        if (bytes == null) {
-            LOGGER.at(Level.WARNING).log("[sendImage] Download failed for url=%s", url)
-            return null
-        }
-        LOGGER.at(Level.INFO).log("[sendImage] Downloaded %d bytes from %s", bytes.size, url)
+        val bytes = downloadBytes(url, ttlSeconds) ?: return null
 
         // Claim a slot
         val slotIndex = DynamicImageAsset.claimSlot(playerRef.uuid)
         if (slotIndex == -1) {
-            LOGGER.at(Level.WARNING).log("[sendImage] No slots available for player=%s", playerRef.username)
+            LOGGER.at(Level.WARNING).log("No dynamic image slots available for player=%s", playerRef.username)
             return null
         }
 
         // Send to player
         val path = DynamicImageAsset.getPath(slotIndex)
-        LOGGER.at(Level.INFO).log("[sendImage] Sending to player: slot=%d, path=%s", slotIndex, path)
         DynamicImageAsset.sendToPlayer(playerRef.packetHandler, slotIndex, bytes)
 
         // Track in player cache
@@ -113,7 +102,6 @@ object DynamicImageManager {
         )
         playerAssetCache[key] = entry
 
-        LOGGER.at(Level.INFO).log("[sendImage] Success: %s -> %s (slot %d)", url, path, slotIndex)
         return CachedAssetInfo(path, slotIndex)
     }
 
@@ -184,15 +172,11 @@ object DynamicImageManager {
         val cached = downloadCache[url]
         if (cached != null) {
             val age = System.currentTimeMillis() - cached.createdAtMs
-            if (age < ttlSeconds * 1000) {
-                LOGGER.at(Level.FINE).log("[download] Byte cache hit for %s (%d bytes)", url, cached.bytes.size)
-                return cached.bytes
-            }
+            if (age < ttlSeconds * 1000) return cached.bytes
         }
 
         // Download fresh
         return try {
-            LOGGER.at(Level.INFO).log("[download] Fetching %s", url)
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMillis(HTTP_TIMEOUT_MS))
@@ -203,15 +187,14 @@ object DynamicImageManager {
 
             if (response.statusCode() == 200) {
                 val bytes = response.body()
-                LOGGER.at(Level.INFO).log("[download] OK: %d bytes from %s", bytes.size, url)
                 downloadCache[url] = CacheEntry(bytes, System.currentTimeMillis())
                 bytes
             } else {
-                LOGGER.at(Level.WARNING).log("[download] HTTP %d for %s", response.statusCode(), url)
+                LOGGER.at(Level.WARNING).log("HTTP %d for %s", response.statusCode(), url)
                 null
             }
         } catch (e: Exception) {
-            LOGGER.at(Level.WARNING).log("[download] Failed for %s: %s", url, e.message)
+            LOGGER.at(Level.WARNING).log("Download failed for %s: %s", url, e.message)
             null
         }
     }
