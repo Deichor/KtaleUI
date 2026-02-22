@@ -107,7 +107,7 @@ class KtaleUIPage(
         // Check if already sent to this player
         val existing = DynamicImageManager.getCachedAssetInfo(playerRef.uuid, url)
         if (existing != null) {
-            update { set("#$elementId.Background.TexturePath", existing.path) }
+            update { set("#$elementId.Background", existing.path) }
             onReady?.invoke(existing.path)
             return
         }
@@ -117,7 +117,7 @@ class KtaleUIPage(
             DynamicImageManager.sendImage(playerRef, url, ttlSeconds)
         }.thenAccept { assetInfo ->
             if (assetInfo != null) {
-                update { set("#$elementId.Background.TexturePath", assetInfo.path) }
+                update { set("#$elementId.Background", assetInfo.path) }
                 onReady?.invoke(assetInfo.path)
             }
         }

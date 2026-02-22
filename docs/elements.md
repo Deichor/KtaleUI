@@ -571,3 +571,25 @@ itemPreviewComponent(id = "itemPreview") {
     anchor { width = 100; height = 100 }
 }
 ```
+
+### DynamicImage
+
+A container element for displaying images downloaded at runtime (e.g., player avatars from a web API). Sends PNG bytes directly to the client via Hytale's asset transfer protocol, bypassing the static asset pack system.
+
+```kotlin
+dynamicImage(id = "playerAvatar") {
+    imageUrl = "https://hyvatar.io/render/PlayerName?size=128"
+    anchor { width = 64; height = 64 }
+    outlineColor = "#FFFFFF"
+    outlineSize = 1f
+}
+```
+
+Serializes as a `Group` in .ui output. The `imageUrl` and `imageFilePath` properties are metadata — actual image loading is handled at runtime via `setDynamicImage()` or `DynamicImageManager`.
+
+| Property | Type | Description |
+|---|---|---|
+| `imageUrl` | `String?` | Remote URL to load at runtime (metadata only) |
+| `imageFilePath` | `String?` | Local file path alternative (metadata only) |
+
+See [Runtime Integration - Dynamic Images](runtime.md#dynamic-images) for loading images at runtime.

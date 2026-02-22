@@ -348,3 +348,81 @@ hud.updateProperty {
     set("#timeBar.Value", 0.6f)
 }
 ```
+
+## Player Profile with Dynamic Avatar
+
+```kotlin
+import org.deichor.ktaleui.asset.DynamicImageManager
+
+val profileUI = ktaleUI("PlayerProfile") {
+    sceneBlur(id = "blur") { anchor { full = 0 } }
+
+    panel(id = "card") {
+        anchor { left = 250; right = 250; top = 100; bottom = 100 }
+        background = patchStyle {
+            texturePath = "textures/ui/panel_dark.png"
+            border = 6
+        }
+        layoutMode = LayoutMode.Top
+
+        // Avatar container with border
+        group(id = "avatarFrame") {
+            anchor { horizontal = 0; height = 120 }
+            layoutMode = LayoutMode.CenterMiddle
+
+            dynamicImage(id = "avatar") {
+                anchor { width = 96; height = 96 }
+                outlineColor = "#4488FF"
+                outlineSize = 2f
+            }
+        }
+
+        label(id = "playerName") {
+            text = "Loading..."
+            style = labelStyle {
+                fontSize = 22f
+                textColor = "#FFFFFF"
+                horizontalAlignment = LabelAlignment.Center
+                renderBold = true
+            }
+            anchor { horizontal = 0; height = 40 }
+        }
+
+        label(id = "playerStatus") {
+            text = "Online"
+            style = labelStyle {
+                fontSize = 14f
+                textColor = "#4ade80"
+                horizontalAlignment = LabelAlignment.Center
+            }
+            anchor { horizontal = 0; height = 24 }
+        }
+
+        textButton(id = "closeBtn") {
+            text = "Close"
+            anchor { width = 120; height = 36 }
+            style = textButtonStyle {
+                default {
+                    background = "textures/ui/btn.png"
+                    labelStyle = labelStyle { fontSize = 14f; textColor = "#CCCCCC" }
+                }
+            }
+            onClick { ctx -> ctx.page.closePage() }
+        }
+    }
+}
+
+// Open and load avatar dynamically
+val page = profileUI.open(playerRef)
+
+page.update {
+    set("#playerName.Text", playerRef.username)
+}
+
+// Load avatar from remote URL — sends PNG bytes via asset protocol
+page.setDynamicImage(
+    elementId = "avatar",
+    url = "https://hyvatar.io/render/${playerRef.username}?size=128",
+    ttlSeconds = 300,
+)
+```

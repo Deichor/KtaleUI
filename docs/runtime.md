@@ -117,6 +117,113 @@ val page = myUI.open(playerRef)
 page.closePage()
 ```
 
+## Dynamic Images
+
+KtaleUI can send images to the client at runtime via Hytale's asset transfer protocol. This is useful for player avatars, remote images, or any content not available in the static asset pack.
+
+### How It Works
+
+1. Server downloads image bytes from a URL (with in-memory caching)
+2. Claims one of 25 per-player asset slots
+3. Sends the PNG bytes to the client using the asset protocol (AssetInitialize → AssetPart → AssetFinalize → RequestCommonAssetsRebuild)
+4. Updates the UI element's `Background` property with the slot's texture path
+
+### Page Helper: setDynamicImage()
+
+The simplest way to load a remote image into a UI element:
+
+```kotlin
+val page = myUI.open(playerRef)
+
+// Load image into element — handles download, sending, and UI update
+page.setDynamicImage(
+    elementId = "playerAvatar",
+    url = "https://hyvatar.io/render/PlayerName?size=128",
+    ttlSeconds = 300,        // cache TTL (default 5 min)
+    onReady = { path ->      // optional callback when image is ready
+        println("Avatar loaded at $path")
+    },
+)
+```
+
+If the image was already sent to this player, it updates immediately. Otherwise it downloads async and updates the element when ready.
+
+### Low-Level: DynamicImageManager
+
+For more control, use `DynamicImageManager` directly:
+
+```kotlin
+import org.deichor.ktaleui.asset.DynamicImageManager
+
+// Synchronous: download + send (blocks until complete)
+val assetInfo = DynamicImageManager.sendImage(playerRef, url, ttlSeconds = 300)
+if (assetInfo != null) {
+    page.update { set("#avatar.Background", assetInfo.path) }
+}
+
+// Asynchronous: download + send with callback
+DynamicImageManager.sendImageAsync(playerRef, url, ttlSeconds = 300) { assetInfo ->
+    if (assetInfo != null) {
+        page.update { set("#avatar.Background", assetInfo.path) }
+    }
+}
+
+// Check if already sent to player
+val cached = DynamicImageManager.getCachedAssetInfo(playerRef.uuid, url)
+
+// Pre-download bytes into cache (warm up before player needs it)
+DynamicImageManager.preDownload(url)
+
+// Release all slots on player disconnect
+DynamicImageManager.releasePlayer(playerRef.uuid)
+```
+
+### Slot Limits
+
+Each player has **25 dynamic image slots**. Slots are claimed on send and released when:
+- The TTL expires and the image is requested again
+- `releasePlayer()` is called (e.g., on disconnect)
+
+### Path Format
+
+Dynamic images use asset paths relative to `Common/` for the protocol, but UI `Background` values are relative to `Common/UI/Custom/`. The `DynamicImageManager` handles this automatically — the returned `CachedAssetInfo.path` is already in the correct UI format (e.g., `Pages/Elements/DynamicImage1.png`).
+
+### Example: Avatar Wrapper
+
+```kotlin
+class AvatarManager(private val cacheTTLSeconds: Long) {
+    private fun buildUrl(username: String) =
+        "https://hyvatar.io/render/$username?size=128&rotate=0"
+
+    fun ensureAvatar(
+        playerRef: PlayerRef,
+        username: String,
+        onReady: ((String) -> Unit)? = null,
+    ): String? {
+        val url = buildUrl(username)
+        val existing = DynamicImageManager.getCachedAssetInfo(playerRef.uuid, url)
+        if (existing != null) return existing.path
+
+        DynamicImageManager.sendImageAsync(playerRef, url, cacheTTLSeconds) { assetInfo ->
+            if (assetInfo != null) onReady?.invoke(assetInfo.path)
+        }
+        return null // download in progress
+    }
+
+    fun releasePlayer(playerUuid: java.util.UUID) {
+        DynamicImageManager.releasePlayer(playerUuid)
+    }
+}
+
+// Usage in a page controller:
+val path = avatarManager.ensureAvatar(playerRef, username) { freshPath ->
+    page.update { set("#AvatarImage.Background", freshPath) }
+}
+if (path != null) {
+    page.update { set("#AvatarImage.Background", path) }
+}
+```
+
 ## Full Runtime Example
 
 ```kotlin
