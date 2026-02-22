@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/Deichor/KtaleUI/compare/v1.1.0...v1.1.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* remove logging from dynamic image asset handling for cleaner code ([67bc730](https://github.com/Deichor/KtaleUI/commit/67bc7300bad69ae50f924d831ad81bc3629d2918))
+
 # [1.1.0](https://github.com/Deichor/KtaleUI/compare/v1.0.1...v1.1.0) (2026-02-22)
 
 
