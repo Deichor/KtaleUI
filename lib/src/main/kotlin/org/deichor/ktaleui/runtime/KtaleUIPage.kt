@@ -15,7 +15,9 @@ import com.hypixel.hytale.server.core.universe.PlayerRef
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore
 import org.deichor.ktaleui.KtaleUI
 import org.deichor.ktaleui.KtaleUIDefinition
+import org.deichor.ktaleui.asset.DynamicImageManager
 import org.deichor.ktaleui.element.EventHandler
+import java.util.concurrent.CompletableFuture
 
 class KtaleUIPage(
     playerRef: PlayerRef,
@@ -85,6 +87,40 @@ class KtaleUIPage(
 
     fun closePage() {
         close()
+    }
+
+    /**
+     * Downloads an image from [url], sends it to the player as a dynamic asset,
+     * and updates the element's background texture path.
+     *
+     * @param elementId the UI element ID to update (without # prefix)
+     * @param url the remote image URL to download and send
+     * @param ttlSeconds how long the cached image is valid (default 5 minutes)
+     * @param onReady optional callback with the asset path after the image is loaded
+     */
+    fun setDynamicImage(
+        elementId: String,
+        url: String,
+        ttlSeconds: Long = 300,
+        onReady: ((String) -> Unit)? = null,
+    ) {
+        // Check if already sent to this player
+        val existing = DynamicImageManager.getCachedAssetInfo(playerRef.uuid, url)
+        if (existing != null) {
+            update { set("#$elementId.Background.TexturePath", existing.path) }
+            onReady?.invoke(existing.path)
+            return
+        }
+
+        // Async download + send
+        CompletableFuture.supplyAsync {
+            DynamicImageManager.sendImage(playerRef, url, ttlSeconds)
+        }.thenAccept { assetInfo ->
+            if (assetInfo != null) {
+                update { set("#$elementId.Background.TexturePath", assetInfo.path) }
+                onReady?.invoke(assetInfo.path)
+            }
+        }
     }
 
     class KtaleEventData {

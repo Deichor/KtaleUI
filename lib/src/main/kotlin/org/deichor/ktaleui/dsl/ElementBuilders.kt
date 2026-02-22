@@ -215,3 +215,7 @@ fun ContainerElement.itemIcon(id: String? = null, block: ItemIconElement.() -> U
 // BlockSelector
 fun UIBuilder.blockSelector(id: String? = null, block: BlockSelectorElement.() -> Unit) = addChild(BlockSelectorElement(), id, block)
 fun ContainerElement.blockSelector(id: String? = null, block: BlockSelectorElement.() -> Unit) = addChild(BlockSelectorElement(), id, block)
+
+// DynamicImage - runtime-loaded image element (serializes as Group)
+fun UIBuilder.dynamicImage(id: String? = null, block: DynamicImageElement.() -> Unit) = addChild(DynamicImageElement(), id, block)
+fun ContainerElement.dynamicImage(id: String? = null, block: DynamicImageElement.() -> Unit) = addChild(DynamicImageElement(), id, block)
