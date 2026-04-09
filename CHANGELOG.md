@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/Deichor/KtaleUI/compare/v1.1.1...v1.1.2) (2026-04-09)
+
+
+### Bug Fixes
+
+* refactor KtaleUI to write .ui files to external directory to resolve Windows file locking issues ([03b63f0](https://github.com/Deichor/KtaleUI/commit/03b63f057ab3eac0eaa40233757c79844abd1a0c))
+
 ## [1.1.1](https://github.com/Deichor/KtaleUI/compare/v1.1.0...v1.1.1) (2026-02-22)
 
 
