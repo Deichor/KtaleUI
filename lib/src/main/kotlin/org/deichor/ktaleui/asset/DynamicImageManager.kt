@@ -2,10 +2,12 @@ package org.deichor.ktaleui.asset
 
 import com.hypixel.hytale.logger.HytaleLogger
 import com.hypixel.hytale.server.core.universe.PlayerRef
+import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Files
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -13,14 +15,16 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 
 /**
- * High-level manager for downloading images from URLs and sending them to players
- * as dynamic image assets at runtime.
+ * High-level manager for downloading images from URLs or reading them from local
+ * files and sending them to players as dynamic image assets at runtime.
  *
  * Features:
- * - In-memory byte cache with configurable TTL
- * - Per-player asset tracking (which URLs have been sent to which players)
+ * - In-memory byte cache with configurable TTL (for URL downloads)
+ * - Per-player asset tracking (which sources have been sent to which players)
  * - Automatic slot management via [DynamicImageAsset]
- * - Async download and send operations
+ * - Async download / disk read and send operations
+ * - Local file cache is keyed by absolute path + last-modified time so replacing
+ *   a file on disk automatically invalidates the cache on the next call.
  */
 object DynamicImageManager {
 
@@ -41,7 +45,7 @@ object DynamicImageManager {
         val path: String,
     )
 
-    /** Key for per-player asset cache. */
+    /** Key for per-player asset cache (generic — URL or file pseudo-URL). */
     private data class PlayerUrlKey(
         val playerUuid: UUID,
         val url: String,
@@ -61,8 +65,12 @@ object DynamicImageManager {
     /** URL → downloaded bytes cache. */
     private val downloadCache = ConcurrentHashMap<String, CacheEntry>()
 
-    /** (player, url) → sent asset info. */
+    /** (player, source-key) → sent asset info. */
     private val playerAssetCache = ConcurrentHashMap<PlayerUrlKey, PlayerAssetEntry>()
+
+    // ──────────────────────────────────────────────────────────────────────
+    // URL-based API
+    // ──────────────────────────────────────────────────────────────────────
 
     /**
      * Downloads an image from [url] (or uses cache), claims a slot, sends it to
@@ -74,35 +82,11 @@ object DynamicImageManager {
      * @return asset info with the path the UI can reference, or null on failure
      */
     fun sendImage(playerRef: PlayerRef, url: String, ttlSeconds: Long = 300): CachedAssetInfo? {
-        // Check if already sent to this player and still valid
         val existing = getCachedAssetInfo(playerRef.uuid, url)
         if (existing != null) return existing
 
-        // Download (or use byte cache)
         val bytes = downloadBytes(url, ttlSeconds) ?: return null
-
-        // Claim a slot
-        val slotIndex = DynamicImageAsset.claimSlot(playerRef.uuid)
-        if (slotIndex == -1) {
-            LOGGER.at(Level.WARNING).log("No dynamic image slots available for player=%s", playerRef.username)
-            return null
-        }
-
-        // Send to player
-        val path = DynamicImageAsset.getPath(slotIndex)
-        DynamicImageAsset.sendToPlayer(playerRef.packetHandler, slotIndex, bytes)
-
-        // Track in player cache
-        val key = PlayerUrlKey(playerRef.uuid, url)
-        val entry = PlayerAssetEntry(
-            bytes = bytes,
-            expiresAtMs = System.currentTimeMillis() + (ttlSeconds * 1000),
-            slotIndex = slotIndex,
-            path = path,
-        )
-        playerAssetCache[key] = entry
-
-        return CachedAssetInfo(path, slotIndex)
+        return sendBytesToPlayer(playerRef, url, bytes, ttlSeconds)
     }
 
     /**
@@ -129,29 +113,7 @@ object DynamicImageManager {
      * @return the cached asset info, or null if not cached or expired
      */
     fun getCachedAssetInfo(playerUuid: UUID, url: String): CachedAssetInfo? {
-        val key = PlayerUrlKey(playerUuid, url)
-        val entry = playerAssetCache[key] ?: return null
-
-        if (System.currentTimeMillis() > entry.expiresAtMs) {
-            // Expired — release slot and remove
-            DynamicImageAsset.releaseSlot(playerUuid, entry.slotIndex)
-            playerAssetCache.remove(key)
-            return null
-        }
-
-        return CachedAssetInfo(entry.path, entry.slotIndex)
-    }
-
-    /**
-     * Releases all dynamic image slots and clears the player cache for the given player.
-     * Call this on player disconnect.
-     */
-    fun releasePlayer(playerUuid: UUID) {
-        DynamicImageAsset.releaseAllSlots(playerUuid)
-
-        // Remove all entries for this player from the player asset cache
-        val keysToRemove = playerAssetCache.keys.filter { it.playerUuid == playerUuid }
-        keysToRemove.forEach { playerAssetCache.remove(it) }
+        return getCachedEntry(playerUuid, url)
     }
 
     /**
@@ -164,18 +126,160 @@ object DynamicImageManager {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Local file API
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Reads a local image file from disk, claims a slot, sends it to the player,
+     * and returns the asset info. Returns `null` on failure (file missing,
+     * unreadable, empty, or no slots available).
+     *
+     * The cache key combines absolute path + last-modified time, so replacing the
+     * file on disk automatically invalidates the cache on the next call.
+     *
+     * @param playerRef the player to send the image to
+     * @param file the local image file on disk
+     * @param ttlSeconds how long the sent asset stays valid for this player
+     */
+    fun sendLocalImage(
+        playerRef: PlayerRef,
+        file: File,
+        ttlSeconds: Long = 300,
+    ): CachedAssetInfo? {
+        val key = localCacheKey(file)
+        if (key == null) {
+            LOGGER.at(Level.WARNING).log("Local image not found or unreadable: %s", file.absolutePath)
+            return null
+        }
+
+        val existing = getCachedEntry(playerRef.uuid, key)
+        if (existing != null) return existing
+
+        val bytes = try {
+            Files.readAllBytes(file.toPath())
+        } catch (e: Exception) {
+            LOGGER.at(Level.WARNING).log("Failed to read local image %s: %s", file.absolutePath, e.message)
+            return null
+        }
+
+        if (bytes.isEmpty()) {
+            LOGGER.at(Level.WARNING).log("Local image is empty: %s", file.absolutePath)
+            return null
+        }
+
+        return sendBytesToPlayer(playerRef, key, bytes, ttlSeconds)
+    }
+
+    /**
+     * Async version of [sendLocalImage]. Disk I/O runs on a CompletableFuture
+     * and calls [callback] with the result on completion.
+     */
+    fun sendLocalImageAsync(
+        playerRef: PlayerRef,
+        file: File,
+        ttlSeconds: Long = 300,
+        callback: ((CachedAssetInfo?) -> Unit)? = null,
+    ): CompletableFuture<CachedAssetInfo?> {
+        return CompletableFuture.supplyAsync {
+            sendLocalImage(playerRef, file, ttlSeconds)
+        }.whenComplete { result, _ ->
+            callback?.invoke(result)
+        }
+    }
+
+    /**
+     * Checks if a local file has already been sent to this player and is still
+     * valid. Returns null if not cached, expired, or if the file on disk has
+     * been modified since it was last sent.
+     */
+    fun getCachedLocalAssetInfo(playerUuid: UUID, file: File): CachedAssetInfo? {
+        val key = localCacheKey(file) ?: return null
+        return getCachedEntry(playerUuid, key)
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Shared
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Releases all dynamic image slots and clears the player cache for the given player.
+     * Call this on player disconnect.
+     */
+    fun releasePlayer(playerUuid: UUID) {
+        DynamicImageAsset.releaseAllSlots(playerUuid)
+
+        val keysToRemove = playerAssetCache.keys.filter { it.playerUuid == playerUuid }
+        keysToRemove.forEach { playerAssetCache.remove(it) }
+    }
+
+    /**
+     * Claims a slot, pushes [bytes] to the player, and tracks the asset in the
+     * per-player cache. Shared by URL and local-file paths.
+     */
+    private fun sendBytesToPlayer(
+        playerRef: PlayerRef,
+        cacheKey: String,
+        bytes: ByteArray,
+        ttlSeconds: Long,
+    ): CachedAssetInfo? {
+        val slotIndex = DynamicImageAsset.claimSlot(playerRef.uuid)
+        if (slotIndex == -1) {
+            LOGGER.at(Level.WARNING).log("No dynamic image slots available for player=%s", playerRef.username)
+            return null
+        }
+
+        val path = DynamicImageAsset.getPath(slotIndex)
+        DynamicImageAsset.sendToPlayer(playerRef.packetHandler, slotIndex, bytes)
+
+        val key = PlayerUrlKey(playerRef.uuid, cacheKey)
+        val entry = PlayerAssetEntry(
+            bytes = bytes,
+            expiresAtMs = System.currentTimeMillis() + (ttlSeconds * 1000),
+            slotIndex = slotIndex,
+            path = path,
+        )
+        playerAssetCache[key] = entry
+
+        return CachedAssetInfo(path, slotIndex)
+    }
+
+    /**
+     * Looks up a cached asset for the given (player, source-key) pair. Returns
+     * null if not cached or expired; releases the slot on expiry.
+     */
+    private fun getCachedEntry(playerUuid: UUID, cacheKey: String): CachedAssetInfo? {
+        val key = PlayerUrlKey(playerUuid, cacheKey)
+        val entry = playerAssetCache[key] ?: return null
+
+        if (System.currentTimeMillis() > entry.expiresAtMs) {
+            DynamicImageAsset.releaseSlot(playerUuid, entry.slotIndex)
+            playerAssetCache.remove(key)
+            return null
+        }
+
+        return CachedAssetInfo(entry.path, entry.slotIndex)
+    }
+
+    /**
+     * Builds a stable cache key for a local file: `file://<abspath>#<mtime>`.
+     * Returns null if the file does not exist or is not a regular file.
+     */
+    private fun localCacheKey(file: File): String? {
+        if (!file.isFile) return null
+        return "file://${file.absolutePath}#${file.lastModified()}"
+    }
+
     /**
      * Downloads bytes from URL, using cache if available and fresh.
      */
     private fun downloadBytes(url: String, ttlSeconds: Long): ByteArray? {
-        // Check byte cache
         val cached = downloadCache[url]
         if (cached != null) {
             val age = System.currentTimeMillis() - cached.createdAtMs
             if (age < ttlSeconds * 1000) return cached.bytes
         }
 
-        // Download fresh
         return try {
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
