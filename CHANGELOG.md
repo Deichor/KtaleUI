@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/Deichor/KtaleUI/compare/v1.1.2...v1.1.3) (2026-04-09)
+
+
+### Bug Fixes
+
+* add support for sending local image files as dynamic image assets, with caching and async operations ([d10ecfe](https://github.com/Deichor/KtaleUI/commit/d10ecfe5af27ecfcaaa9744cb53dd1418b088408))
+
 ## [1.1.2](https://github.com/Deichor/KtaleUI/compare/v1.1.1...v1.1.2) (2026-04-09)
 
 
