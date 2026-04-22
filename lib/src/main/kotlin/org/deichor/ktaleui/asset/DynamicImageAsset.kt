@@ -20,36 +20,54 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object DynamicImageAsset {
 
-    private const val MAX_SLOTS = 25
+    private const val DEFAULT_MAX_SLOTS = 25
     private const val CHUNK_SIZE = 2_621_440 // Same as CommonAssetModule.MAX_FRAME
 
-    /**
-     * Asset names for each slot (relative to Common/).
-     * These are sent via the asset protocol's Asset.name field.
-     */
-    private val SLOT_ASSET_NAMES: Array<String> = Array(MAX_SLOTS) { i ->
-        "UI/Custom/Pages/Elements/DynamicImage${i + 1}.png"
-    }
+    private var maxSlots = DEFAULT_MAX_SLOTS
+    private lateinit var slotAssetNames: Array<String>
+    private lateinit var slotPaths: Array<String>
+    private lateinit var slotHashes: Array<String>
+    private var initialized = false
 
     /**
      * UI-facing paths for each slot (relative to Common/UI/Custom/).
      * These are used in UI property commands like set("#Element.Background", path).
-     * The client's UI system prepends "UI/Custom/" when looking up assets,
-     * so the UI path is the asset name minus the "UI/Custom/" prefix.
      */
-    val SLOT_PATHS: Array<String> = Array(MAX_SLOTS) { i ->
-        "Pages/Elements/DynamicImage${i + 1}.png"
-    }
+    val SLOT_PATHS: Array<String>
+        get() {
+            ensureInitialized()
+            return slotPaths
+        }
 
     /**
-     * Pre-defined unique 64-char hex hashes for each slot.
-     * These are fake hashes — they just need to be unique per slot
-     * so the client treats each as a distinct asset.
+     * Configures the maximum number of dynamic image slots available per player.
+     * Call this once during plugin setup, before any images are sent.
+     * Defaults to [DEFAULT_MAX_SLOTS] if not called.
+     *
+     * @param maxSlots the maximum number of concurrent dynamic images per player
      */
-    private val SLOT_HASHES: Array<String> = Array(MAX_SLOTS) { i ->
-        val base = "d1a2b3c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
-        // Modify the last 2 chars to make each hash unique
-        base.substring(0, 62) + String.format("%02x", i + 1)
+    fun configure(maxSlots: Int) {
+        require(maxSlots > 0) { "maxSlots must be positive" }
+        this.maxSlots = maxSlots
+        buildSlotArrays()
+    }
+
+    private fun ensureInitialized() {
+        if (!initialized) buildSlotArrays()
+    }
+
+    private fun buildSlotArrays() {
+        slotAssetNames = Array(maxSlots) { i ->
+            "UI/Custom/Pages/Elements/DynamicImage${i + 1}.png"
+        }
+        slotPaths = Array(maxSlots) { i ->
+            "Pages/Elements/DynamicImage${i + 1}.png"
+        }
+        slotHashes = Array(maxSlots) { i ->
+            val base = "d1a2b3c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0"
+            base + String.format("%04x", i + 1)
+        }
+        initialized = true
     }
 
     /** Tracks which slots are in use per player. */
@@ -61,7 +79,8 @@ object DynamicImageAsset {
      */
     @Synchronized
     fun claimSlot(playerUuid: UUID): Int {
-        val slots = playerSlots.getOrPut(playerUuid) { BooleanArray(MAX_SLOTS) }
+        ensureInitialized()
+        val slots = playerSlots.getOrPut(playerUuid) { BooleanArray(maxSlots) }
         for (i in slots.indices) {
             if (!slots[i]) {
                 slots[i] = true
@@ -93,7 +112,10 @@ object DynamicImageAsset {
     /**
      * Returns the asset path for the given slot index.
      */
-    fun getPath(slotIndex: Int): String = SLOT_PATHS[slotIndex]
+    fun getPath(slotIndex: Int): String {
+        ensureInitialized()
+        return slotPaths[slotIndex]
+    }
 
     /**
      * Sends image bytes to a player via the Hytale asset transfer protocol.
@@ -105,8 +127,9 @@ object DynamicImageAsset {
      * @param imageBytes the raw PNG image bytes to send
      */
     fun sendToPlayer(packetHandler: PacketHandler, slotIndex: Int, imageBytes: ByteArray) {
-        val assetName = SLOT_ASSET_NAMES[slotIndex]
-        val assetPacket = Asset(SLOT_HASHES[slotIndex], assetName)
+        ensureInitialized()
+        val assetName = slotAssetNames[slotIndex]
+        val assetPacket = Asset(slotHashes[slotIndex], assetName)
         val chunks = ArrayUtil.split(imageBytes, CHUNK_SIZE)
 
         val packets = mutableListOf<ToClientPacket>()
