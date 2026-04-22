@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/Deichor/KtaleUI/compare/v1.1.3...v1.2.0) (2026-04-22)
+
+
+### Features
+
+* add configurable dynamic image slot system and lazy initialization ([4d9a97f](https://github.com/Deichor/KtaleUI/commit/4d9a97fc878fb8bfb8aab43ba0eee4e78585befc))
+
 ## [1.1.3](https://github.com/Deichor/KtaleUI/compare/v1.1.2...v1.1.3) (2026-04-09)
 
 
