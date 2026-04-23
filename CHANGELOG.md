@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Deichor/KtaleUI/compare/v1.2.0...v1.3.0) (2026-04-23)
+
+
+### Features
+
+* introduce type-safe UI reference system with compile-time validation ([0e584f0](https://github.com/Deichor/KtaleUI/commit/0e584f0a1e95030fb577b24c68a644974a6098ea))
+
 # [1.2.0](https://github.com/Deichor/KtaleUI/compare/v1.1.3...v1.2.0) (2026-04-22)
 
 
