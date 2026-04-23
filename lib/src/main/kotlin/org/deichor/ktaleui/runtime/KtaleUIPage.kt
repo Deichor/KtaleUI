@@ -17,6 +17,7 @@ import org.deichor.ktaleui.KtaleUI
 import org.deichor.ktaleui.KtaleUIDefinition
 import org.deichor.ktaleui.asset.DynamicImageManager
 import org.deichor.ktaleui.element.EventHandler
+import org.deichor.ktaleui.ref.ElementRef
 import java.util.concurrent.CompletableFuture
 
 class KtaleUIPage(
@@ -88,6 +89,23 @@ class KtaleUIPage(
     fun closePage() {
         close()
     }
+
+    /**
+     * Downloads an image from [url], sends it to the player as a dynamic asset,
+     * and updates the element's background texture path.
+     *
+     * Type-safe overload using [ElementRef]:
+     * ```kotlin
+     * val avatar = DynamicImageRef("Avatar")
+     * page.setDynamicImage(avatar, "https://example.com/img.png")
+     * ```
+     */
+    fun setDynamicImage(
+        ref: ElementRef,
+        url: String,
+        ttlSeconds: Long = 300,
+        onReady: ((String) -> Unit)? = null,
+    ) = setDynamicImage(ref.id, url, ttlSeconds, onReady)
 
     /**
      * Downloads an image from [url], sends it to the player as a dynamic asset,

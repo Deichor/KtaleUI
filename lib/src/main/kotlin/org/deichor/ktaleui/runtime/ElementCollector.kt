@@ -25,6 +25,21 @@ private fun collectHandlersRecursive(
     }
 }
 
+internal fun collectAllIds(elements: List<UIElement>): Set<String> {
+    val result = mutableSetOf<String>()
+    collectIdsRecursive(elements, result)
+    return result
+}
+
+private fun collectIdsRecursive(elements: List<UIElement>, result: MutableSet<String>) {
+    for (element in elements) {
+        element.id?.let { result.add(it) }
+        if (element is ContainerElement) {
+            collectIdsRecursive(element.children, result)
+        }
+    }
+}
+
 internal fun collectElementsWithEvents(elements: List<UIElement>): List<UIElement> {
     val result = mutableListOf<UIElement>()
     collectElementsRecursive(elements, result)
