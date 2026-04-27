@@ -51,6 +51,12 @@ class KtaleUIPage(
                     eventData.append("@Value", "#$elementId.Value")
                 }
 
+                // For slider types, bind value as float (client sends numbers, not strings)
+                val sliderTypes = setOf("Slider", "FloatSlider", "SliderNumberField", "FloatSliderNumberField")
+                if (element.elementType in sliderTypes && eventName in setOf("ValueChanged", "MouseButtonReleased")) {
+                    eventData.append("@FloatValue", "#$elementId.Value")
+                }
+
                 eventBuilder.addEventBinding(
                     bindingType,
                     "#$elementId",
@@ -144,10 +150,12 @@ class KtaleUIPage(
     class KtaleEventData {
         var action: String? = null
         var value: String? = null
+        var floatValue: Float? = null
 
         fun toMap(): Map<String, String> = buildMap {
             action?.let { put("Action", it) }
             value?.let { put("Value", it) }
+            floatValue?.let { put("Value", it.toString()) }
         }
 
         companion object {
@@ -165,6 +173,12 @@ class KtaleUIPage(
                     KeyedCodec("@Value", Codec.STRING),
                     { data, value -> data.value = value },
                     { data -> data.value },
+                )
+                .add()
+                .append(
+                    KeyedCodec("@FloatValue", Codec.FLOAT),
+                    { data, value -> data.floatValue = value },
+                    { data -> data.floatValue },
                 )
                 .add()
                 .build()
